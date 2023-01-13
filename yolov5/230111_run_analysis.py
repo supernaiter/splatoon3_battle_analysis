@@ -16,9 +16,10 @@ import os
 from PIL import Image
 import time
 
-import tensorflow as tf
+#import tensorflow as tf
 import re
 
+"""
 physical_devices = tf.config.list_physical_devices('GPU')
 if len(physical_devices) > 0:
     for device in physical_devices:
@@ -26,18 +27,18 @@ if len(physical_devices) > 0:
         print('{} memory growth: {}'.format(device, tf.config.experimental.get_memory_growth(device)))
 else:
     print("Not enough GPU hardware devices available")
-
+"""
 
 # Image
 img = "../battle.png"
 
 # Inference
-model = torch.hub.load('.', 'custom', path='../the_model.pt', source='local')
+model = torch.hub.load('.', 'custom', path='../models/the_model.pt', source='local')
 # model.conf = 0.25  # NMS confidence threshold
 model.iou = 0.3  # NMS IoU threshold
 
-ocr_model = torch.hub.load('.', 'custom', path='../ocr_model.pt', source='local')
-message_ocr_model = torch.hub.load('.', 'custom', path='../message_ocr_model.pt', source='local')
+ocr_model = torch.hub.load('.', 'custom', path='../models/ocr_model.pt', source='local')
+#message_ocr_model = torch.hub.load('.', 'custom', path='../message_ocr_model.pt', source='local')
 
 
 results = model(img, 640)
@@ -59,7 +60,7 @@ area_object_num = [k for k, v in results_names.items() if v == 'area_object'][0]
 asari_object_num = [k for k, v in results_names.items() if v == 'asari_object'][0]
 player_num = [k for k, v in results_names.items() if v == 'player'][0]
 
-
+"""
 weapon_model = tf.keras.models.load_model('models/weapon_keras_model')
 main_list = ['52-Gal', '96-Gal', 'Aerospray', 'Ballpoint-Splatling', 'Bamboozler-14-Mk-I', 'Blaster', 'Bloblobber', 'Carbon-Roller', 'Clash-Blaster', 'Dapple-Dualies', 'Dark-Tetra-Dualies', 'Dualie-Squelchers', 'Dynamo-Roller', 'E-liter-4K', 'Explosher', 'Flingza-Roller', 'Glooga-Dualies', 'Goo-Tuber', 'H-3-Nozzlenose', 'Heavy-Splatling', 'Hero-Shooter-Replica', 'Hydra-Splatling', 'Inkbrush', 'Jet-Squelcher', 'L-3-Nozzlenose', 'LACT-450',
              'Luna-Blaster', 'Mini-Splatling', 'N-ZAP85', 'Nautilus-47', 'Octobrush', 'Range-Blaster', 'Rapid-Blaster', 'Rapid-Blaster-Pro', 'Slosher', 'Sloshing-Machine', 'Splash-o-matic', 'Splat-Brella', 'Splat-Charger', 'Splat-Dualies', 'Splat-Roller', 'Splatana-Stamper', 'Splatana-Wiper', 'Splattershot', 'Splattershot-Jr', 'Splattershot-Pro', 'Sploosh-o-matic', 'Squeezer', 'Squiffer', 'Tenta-Brella', 'Tri-Slosher', 'Tri-Stringer', 'Undercover-Brella']
@@ -67,7 +68,7 @@ main_list = ['52-Gal', '96-Gal', 'Aerospray', 'Ballpoint-Splatling', 'Bamboozler
 stage_model = tf.keras.models.load_model('models/stage_keras_model')
 stage_list = ['amabi', 'chozame', 'gonzui', 'kinmedai', 'mahimahi',
               'masaba', 'mategai', 'namerou', 'sumeshi', 'yagara', 'yunohana', 'zatou']
-
+"""
 
 def output_ikalump_array(results):
     np_results = results.xyxy[0].cpu().numpy()
@@ -785,173 +786,179 @@ yagura_kanmon_num = [k for k, v in results_names.items() if v == 'yagura_kanmon'
 area_object_num = [k for k, v in results_names.items() if v == 'area_object'][0]
 asari_object_num = [k for k, v in results_names.items() if v == 'asari_object'][0]
 
+def main():
+    l = glob.glob('/Volumes/GoogleDrive/My Drive/2023/splatoon_analysis/videos/*.mp4')
+    print(len(l))
+    random.shuffle(l)
+    for input_video_path in l:
+        print(input_video_path)
+        csv_path = input_video_path.split(".")[0] + "_ver_two.csv"
+        print(csv_path)
+        if os.path.isfile(csv_path):
+            continue
+        print(csv_path)
+        cap = cv2.VideoCapture(input_video_path)
+        fps = 10
+        frame_interval = cap.get(cv2.CAP_PROP_FPS) // fps
+        print("fps", fps)
+        fps_original = cap.get(cv2.CAP_PROP_FPS)
+        count = 0
+        frame_count = 0
+        analysis_date = datetime.datetime.now()
+        # count_list = [100,100]
+        # penalty_list = [0,0]
 
-l = glob.glob('/home/hdd/splastock/720p/*/*[0-9].mp4')
-print(len(l))
-random.shuffle(l)
-for input_video_path in l:
-    print(input_video_path)
-    csv_path = input_video_path.split(".")[0] + "_ver_two.csv"
-    print(csv_path)
-    if os.path.isfile(csv_path):
-        continue
-    print(csv_path)
-    cap = cv2.VideoCapture(input_video_path)
-    fps = 10
-    frame_interval = cap.get(cv2.CAP_PROP_FPS) // fps
-    print("fps", fps)
-    fps_original = cap.get(cv2.CAP_PROP_FPS)
-    count = 0
-    frame_count = 0
-    analysis_date = datetime.datetime.now()
-    # count_list = [100,100]
-    # penalty_list = [0,0]
+        # hundred_results = []
+        warm_up_results = []
 
-    # hundred_results = []
-    warm_up_results = []
+        # special_batch = []
+        warm_up_batch = []
 
-    # special_batch = []
-    warm_up_batch = []
+        # message_batch = []
 
-    # message_batch = []
+        # final_result = []
+        final_result = deque()
 
-    # final_result = []
-    final_result = deque()
+        start_frame = None
 
-    start_frame = None
+        in_game = False
+        weapon_list = []
+        detected_rule = None
+        detected_stage = None
 
-    in_game = False
-    weapon_list = []
-    detected_rule = None
-    detected_stage = None
+        ikalump_combo = 0
+        no_signal_combo = 0
+        match_count = 0
+        state = 0
+        # fps = 1
+        prep_flag = True
+        warm_up_frames = 10
 
-    ikalump_combo = 0
-    no_signal_combo = 0
-    match_count = 0
-    state = 0
-    # fps = 1
-    prep_flag = True
-    warm_up_frames = 10
+        start_timestamp = None
 
-    start_timestamp = None
+        saved_center = cap.get(cv2.CAP_PROP_FRAME_WIDTH) // 2
 
-    saved_center = cap.get(cv2.CAP_PROP_FRAME_WIDTH) // 2
+        while True:
+            count += 1
+            if count % frame_interval == 0:
+                ret, frame = cap.read()
+                startingts = time.time()
+                if not ret:
+                    print('break')
+                    break
+                frame_count += 1
+                cv2.imshow("yolo", frame)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                before = time.time()
+                results = model(frame, 640)
+                np_results = results.xyxy[0].cpu().numpy()
+                # print(np_results)
+                alive_count = np.sum(np_results[:, 5] == alive_num)
+                dead_count = np.sum(np_results[:, 5] == dead_num)
+                special_count = np.sum(np_results[:, 5] == special_num)
+                result_list = [None] * 33
 
-    while True:
-        count += 1
-        if count % frame_interval == 0:
-            ret, frame = cap.read()
-            startingts = time.time()
-            if not ret:
-                print('break')
-                break
-            frame_count += 1
-            # cv2.imshow("yolo", frame)
-            # if cv2.waitKey(1) & 0xFF == ord('q'):
-            #    break
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            before = time.time()
-            results = model(frame, 640)
-            np_results = results.xyxy[0].cpu().numpy()
-            # print(np_results)
-            alive_count = np.sum(np_results[:, 5] == alive_num)
-            dead_count = np.sum(np_results[:, 5] == dead_num)
-            special_count = np.sum(np_results[:, 5] == special_num)
-            result_list = [None] * 33
+                area_count = np.sum(np_results[:, 5] == area_object_num)
+                asari_count = np.sum(np_results[:, 5] == asari_object_num)
+                hoko_count = np.sum(np_results[:, 5] == hoko_kanmon_num)
+                yagura_count = np.sum(np_results[:, 5] == yagura_kanmon_num)
+                player_count = np.sum(np_results[:, 5] == player_num)
 
-            area_count = np.sum(np_results[:, 5] == area_object_num)
-            asari_count = np.sum(np_results[:, 5] == asari_object_num)
-            hoko_count = np.sum(np_results[:, 5] == hoko_kanmon_num)
-            yagura_count = np.sum(np_results[:, 5] == yagura_kanmon_num)
-            player_count = np.sum(np_results[:, 5] == player_num)
+                map_info_count = np.sum(np_results[:, 5] == 8)
+                map_player_dead_count = np.sum(np_results[:, 5] == 9)
+                map_player_position_count = np.sum(np_results[:, 5] == 10)
 
-            map_info_count = np.sum(np_results[:, 5] == 8)
-            map_player_dead_count = np.sum(np_results[:, 5] == 9)
-            map_player_position_count = np.sum(np_results[:, 5] == 10)
+                message_count = np.sum(np_results[:, 5] == message_num)
 
-            message_count = np.sum(np_results[:, 5] == message_num)
+                all_count = alive_count + dead_count + special_count
+                # print(alive_count, dead_count, special_count, all_count)
+                map_count = map_info_count + map_player_dead_count + map_player_position_count
 
-            all_count = alive_count + dead_count + special_count
-            # print(alive_count, dead_count, special_count, all_count)
-            map_count = map_info_count + map_player_dead_count + map_player_position_count
+                result_list[29] = analysis_date
+                result_list[28] = input_video_path
 
-            result_list[29] = analysis_date
-            result_list[28] = input_video_path
+                if start_frame is not None:
 
-            if start_frame is not None:
+                    result_list[0] = round((frame_count - start_frame) * (1 / fps), 1)
 
-                result_list[0] = round((frame_count - start_frame) * (1 / fps), 1)
+                # rule_count = area_count + asari_count + hoko_count + nawabari_count + yagura_count
+                if all_count == 8:
+                    if start_frame == None:
+                        start_frame = frame_count
 
-            # rule_count = area_count + asari_count + hoko_count + nawabari_count + yagura_count
-            if all_count == 8:
-                if start_frame == None:
-                    start_frame = frame_count
+                    ikalump_state = list(output_ikalump_line(results))
+                    for i in range(len(ikalump_state)):
+                        result_list[1 + i] = ikalump_state[i]
 
-                ikalump_state = list(output_ikalump_line(results))
-                for i in range(len(ikalump_state)):
-                    result_list[1 + i] = ikalump_state[i]
 
-                if warm_up_frames > 0:
-                    warm_up_batch.append(results)
-                    # weapon_list = output_weapon_names(results,weapon_model, main_list)
-                    # for i in range(len(weapon_list)):
-                    #    result_list[24+i] = weapon_list[i]
+                    """
+                    if warm_up_frames > 0:
+                        warm_up_batch.append(results)
+                        # weapon_list = output_weapon_names(results,weapon_model, main_list)
+                        # for i in range(len(weapon_list)):
+                        #    result_list[24+i] = weapon_list[i]
 
-                    # detected_stage = classify_stage(results, stage_model, stage_list)
-                    # result_list[33] = detected_stage
+                        # detected_stage = classify_stage(results, stage_model, stage_list)
+                        # result_list[33] = detected_stage
 
-                    warm_up_frames -= 1
+                        warm_up_frames -= 1
+                        if warm_up_frames == 0:
+                            # print("warm_up_frames",len(warm_up_batch))
+
+                            # warm_up_resultsを処理する
+                            detected_stage = batch_stage_classification(warm_up_batch)
+                            weapon_list = batch_weapon_classification(warm_up_batch)
+                            # print(result_list)
+                    """
+                    # detected_rule = "yagura"
+                    """
                     if warm_up_frames == 0:
-                        # print("warm_up_frames",len(warm_up_batch))
+                        result_list[21] = detected_stage
+                        for i in range(len(weapon_list)):
+                            result_list[13 + i] = weapon_list[i]
+                    """
 
-                        # warm_up_resultsを処理する
-                        detected_stage = batch_stage_classification(warm_up_batch)
-                        weapon_list = batch_weapon_classification(warm_up_batch)
-                        # print(result_list)
-                # detected_rule = "yagura"
-                if warm_up_frames == 0:
-                    result_list[21] = detected_stage
-                    for i in range(len(weapon_list)):
-                        result_list[13 + i] = weapon_list[i]
+                result_list[22] = asari_count
+                result_list[23] = hoko_count
+                result_list[24] = area_count
+                result_list[25] = yagura_count
+                """
+                if message_count > 0:
+                    message = ocr_message_yolo(message_ocr_model, results.ims[0])
+                    # plt.imshow(results.ims[0])
+                    # plt.show()
+                    print(message)
+                    result_list[26] = message
+                """            
+                if player_count > 0:
+                    result_list[27] = True
+                # print("second", time.time() - before)
 
-            result_list[22] = asari_count
-            result_list[23] = hoko_count
-            result_list[24] = area_count
-            result_list[25] = yagura_count
+                # count_list = output_count_numbers_pytesseract(results)
+                # if frame_count % 5 == 0:
+                count_list = output_count_numbers(results)
+                for i in range(len(count_list)):
+                    result_list[9 + i] = count_list[i]
+                # penalty_list = output_penalty_numbers_pytesseract(results)
+                penalty_list = output_penalty_numbers(results)
+                for i in range(len(penalty_list)):
+                    result_list[11 + i] = penalty_list[i]
+                
+                print(result_list)
+                final_result.append(result_list)
+                # print("last", time.time() - startingts)
 
-            if message_count > 0:
-                message = ocr_message_yolo(message_ocr_model, results.ims[0])
-                # plt.imshow(results.ims[0])
-                # plt.show()
-                print(message)
-                result_list[26] = message
+            else:
+                ret = cap.grab()
 
-            if player_count > 0:
-                result_list[27] = True
-            # print("second", time.time() - before)
+        final_result = list(final_result)
 
-            # count_list = output_count_numbers_pytesseract(results)
-            # if frame_count % 5 == 0:
-            count_list = output_count_numbers(results)
-            for i in range(len(count_list)):
-                result_list[9 + i] = count_list[i]
-            # penalty_list = output_penalty_numbers_pytesseract(results)
-            penalty_list = output_penalty_numbers(results)
-            for i in range(len(penalty_list)):
-                result_list[11 + i] = penalty_list[i]
-
-            final_result.append(result_list)
-            # print("last", time.time() - startingts)
-
-        else:
-            ret = cap.grab()
-
-    final_result = list(final_result)
-
-    with open(csv_path, mode="w", newline="") as f:
-        writer = csv.writer(f)
-        for res in final_result:
-            writer.writerow(res)
+        with open(csv_path, mode="w", newline="") as f:
+            writer = csv.writer(f)
+            for res in final_result:
+                writer.writerow(res)
 
 
 if __name__ == "__main__":
