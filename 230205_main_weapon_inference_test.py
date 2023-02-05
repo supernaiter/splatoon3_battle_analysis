@@ -9,6 +9,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 class ImageTransform():
     def __init__(self, mean, std):
         self.data_transform = transforms.Compose([
+            transforms.Resize((64, 64)),
             transforms.ToTensor(),
             transforms.Normalize(mean, std)
         ])
@@ -33,17 +34,24 @@ f.close()
 img = Image.open("52-Gal.jpg")
 
 inputs = transform(img)
+print(inputs.shape)
 inputs = inputs.unsqueeze(0).to(device)
-
+print(inputs.shape)
 model = torch.load('main_weapons_classification_weight.pth')
 model.eval()  ## torch.nn.Module.eval
 
 with torch.no_grad():
     outputs = model(inputs)
+    print(outputs.shape)
     batch_probs = F.softmax(outputs, dim=1)
     batch_probs, batch_indices = batch_probs.sort(dim=1, descending=True)
-
+    print(batch_indices)
+    print(batch_indices.shape)
     for probs, indices in zip(batch_probs, batch_indices):
-        for k in range(3):
-            print(f"Top-{k + 1} {class_names[indices[k]]} {probs[k]:.2%}")
+        for k in range(1):
+            print(k)
+            print(indices[k])
+            print(class_names[indices[k]])
+# %%
+print(class_names)
 # %%
