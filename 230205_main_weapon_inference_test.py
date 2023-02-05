@@ -31,27 +31,60 @@ for x in f:
     #list_row.append(x)
 f.close()
 
-img = Image.open("52-Gal.jpg")
+#%%
+img = Image.open("dinamo.jpg")
 
 inputs = transform(img)
-print(inputs.shape)
 inputs = inputs.unsqueeze(0).to(device)
-print(inputs.shape)
 model = torch.load('main_weapons_classification_weight.pth')
 model.eval()  ## torch.nn.Module.eval
 
 with torch.no_grad():
     outputs = model(inputs)
-    print(outputs.shape)
     batch_probs = F.softmax(outputs, dim=1)
     batch_probs, batch_indices = batch_probs.sort(dim=1, descending=True)
-    print(batch_indices)
-    print(batch_indices.shape)
     for probs, indices in zip(batch_probs, batch_indices):
         for k in range(1):
             print(k)
             print(indices[k])
             print(class_names[indices[k]])
+
 # %%
-print(class_names)
+img = Image.open("dinamo.jpg")
+
+inputs = transform(img)
+inputs = inputs.unsqueeze(0).to(device)
+model = torch.load('main_weapons_classification_weight.pth')
+model.eval()  ## torch.nn.Module.eval
+
+with torch.no_grad():
+    outputs = model(inputs)
+    batch_probs = F.softmax(outputs, dim=1)
+    batch_probs, batch_indices = batch_probs.sort(dim=1, descending=True)
+    for probs, indices in zip(batch_probs, batch_indices):
+        for k in range(1):
+            print(k)
+            print(indices[k])
+            print(class_names[indices[k]])
+
+
+#%%
+
+img = Image.open("sharpmarker.jpg")
+
+inputs = transform(img)
+inputs = inputs.unsqueeze(0).to(device)
+model = torch.load('main_weapons_classification_weight.pth')
+model.eval()  ## torch.nn.Module.eval
+
+with torch.no_grad():
+    outputs = model(inputs)
+    batch_probs = F.softmax(outputs, dim=1)
+    batch_probs, batch_indices = batch_probs.sort(dim=1, descending=True)
+    for probs, indices in zip(batch_probs, batch_indices):
+        for k in range(1):
+            print(k)
+            print(indices[k])
+            print(class_names[indices[k]])
+
 # %%
