@@ -50,7 +50,7 @@ with torch.no_grad():
             print(class_names[indices[k]])
 
 # %%
-img = Image.open("dinamo.jpg")
+img = Image.open("sharpmarker.jpg")
 
 inputs = transform(img)
 inputs = inputs.unsqueeze(0).to(device)
@@ -71,6 +71,7 @@ with torch.no_grad():
 #%%
 
 img = Image.open("sharpmarker.jpg")
+#img = Image.open("dinamo.jpg")
 
 inputs = transform(img)
 inputs = inputs.unsqueeze(0).to(device)
@@ -82,7 +83,7 @@ with torch.no_grad():
     batch_probs = F.softmax(outputs, dim=1)
     batch_probs, batch_indices = batch_probs.sort(dim=1, descending=True)
     for probs, indices in zip(batch_probs, batch_indices):
-        for k in range(1):
+        for k in range(3):
             print(k)
             print(indices[k])
             print(class_names[indices[k]])
