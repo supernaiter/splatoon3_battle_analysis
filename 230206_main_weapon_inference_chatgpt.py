@@ -5,7 +5,8 @@ from torchvision import transforms
 from PIL import Image
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-weapon_model = torch.load('main_weapons_classification_weight.pth')
+#weapon_model = torch.load('main_weapons_classification_weight.pth')
+weapon_model = torch.load('230206_main_weapons_classification_weight.pth')
 
 class ImageTransform:
     def __init__(self, mean, std):

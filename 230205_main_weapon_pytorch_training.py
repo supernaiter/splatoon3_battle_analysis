@@ -57,7 +57,7 @@ class ImageTransform():
 mean = (0.5,)
 std = (0.5,)
 #images = torchvision.datasets.ImageFolder( "/content/drive/MyDrive/2023/splashlog/230204_main_weapons", transform = ImageTransform(mean, std))
-images = torchvision.datasets.ImageFolder( "../230205_main_weapons_color_augmented", transform = ImageTransform(mean, std))
+images = torchvision.datasets.ImageFolder( "../main_weapons_for_training", transform = ImageTransform(mean, std))
 
 # %%
 n_classes = len(images.classes)

@@ -189,13 +189,14 @@ def output_weapon_names(results, weapon_model, main_list):
     return weapon_classification_list
 
 #%%
-f = open("../weapon_list.txt","r")
+f = open("../main_weapon_list.txt","r")
 main_list = []
 for x in f:
     main_list.append(x.rstrip("\n"))
     #以下のようにしてしまうと、改行コードがlistに入ってしまうため注意
     #list_row.append(x)
 f.close()
+print(len(main_list))
 #%%
 from torchvision import transforms
 import torch.nn.functional as F
@@ -216,7 +217,7 @@ std = (0.5,)
 
 transform = ImageTransform(mean, std)
 
-weapon_model = torch.load('../main_weapons_classification_weight.pth')
+weapon_model = torch.load('../230206_main_weapons_classification_weight.pth')
 weapon_model.eval()  ## torch.nn.Module.eval
 
 
@@ -468,7 +469,7 @@ def batch_weapon_classification(warm_up_batch):
     imgs = []
     for result in warm_up_batch:
         imgs.extend(output_weapons_images_for_special(result))
-    imgs_np = []
+    """
 
     for img in imgs:
         imgs_np.append(tf.image.resize(img, (160, 160)))
@@ -480,6 +481,8 @@ def batch_weapon_classification(warm_up_batch):
 
     for p in predict:
         weapon_classification_list.append(p.argmax())
+    
+    """
 
     np_class_array = np.array(weapon_classification_list).reshape(len(weapon_classification_list) // 8, 8)
     print(np_class_array)
@@ -487,6 +490,18 @@ def batch_weapon_classification(warm_up_batch):
         final_weapon_result.append(main_list[statistics.mode(np_class_array[:, i])])
     return final_weapon_result
 
+
+def pytorch_weapon_classification(warm_up_batch):
+    raw_outputs = []
+    final_weapon_result = []
+    for batch_result in warm_up_batch:
+        raw_outputs.append(output_weapon_names_pytorch(results, weapon_model, main_list))
+    
+    raw_outputs = np.array(raw_outputs)
+    for i in range(raw_outputs.shape[1]):
+        final_weapon_result.append(statistics.mode(raw_outputs[:,i]))
+
+    return final_weapon_result
 
 def batch_special_classification(special_batch, hundred_results):
     special_classification_list = []
@@ -867,8 +882,7 @@ hoko_kanmon_num = [k for k, v in results_names.items() if v == 'hoko_canmon'][0]
 yagura_kanmon_num = [k for k, v in results_names.items() if v == 'yagura_kanmon'][0]
 area_object_num = [k for k, v in results_names.items() if v == 'area_object'][0]
 asari_object_num = [k for k, v in results_names.items() if v == 'asari_object'][0]
-#%% testing_using_sample image
-print(main_list)
+
 
 #%% testing_using_sample image
 img = "../sample_starting.png"
@@ -887,9 +901,9 @@ random.shuffle(l)
 
 for input_video_path in l:
     print(input_video_path)
-    csv_path = input_video_path.split(".")[0] + "_ver_two.csv"
-    print(csv_path)
-    if os.path.isfile(csv_path):
+    csv_path_ver_two = input_video_path.split(".")[0] + "_ver_two.csv"
+    csv_path = input_video_path.split(".")[0] + "_ver_three.csv"
+    if os.path.isfile(csv_path_ver_two):
         continue
     print(csv_path)
     cap = cv2.VideoCapture(input_video_path)
@@ -1001,14 +1015,17 @@ for input_video_path in l:
                         # print("warm_up_frames",len(warm_up_batch))
 
                         # warm_up_resultsを処理する
-                        detected_stage = batch_stage_classification(warm_up_batch)
-                        weapon_list = batch_weapon_classification(warm_up_batch)
+                        #detected_stage = batch_stage_classification(warm_up_batch)
+                        detected_stage = None
+                        #weapon_list = batch_weapon_classification(warm_up_batch)
+                        weapon_list = pytorch_weapon_classification(warm_up_batch)
                         # print(result_list)
                 # detected_rule = "yagura"
                 if warm_up_frames == 0:
                     result_list[21] = detected_stage
                     for i in range(len(weapon_list)):
                         result_list[13 + i] = weapon_list[i]
+                print("warm_up_ends.")
 
             result_list[22] = asari_count
             result_list[23] = hoko_count
@@ -1052,3 +1069,5 @@ for input_video_path in l:
 
 if __name__ == "__main__":
     main()
+
+# %%

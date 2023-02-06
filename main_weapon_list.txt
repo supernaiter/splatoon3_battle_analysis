@@ -4,7 +4,6 @@ Aerospray
 Aerospray-RG
 Ballpoint-Splatling
 Bamboozler-14-Mk-I
-Big-Swig-Roller
 Blaster
 Bloblobber
 Carbon-Roller
@@ -19,6 +18,7 @@ Dynamo-Roller
 E-liter-4K
 Explosher
 Flingza-Roller
+Forge-Splattershot-Pro
 Glooga-Dualies
 Goo-Tuber
 H-3-Nozzlenose
@@ -42,7 +42,6 @@ Rapid-Blaster-Pro
 Slosher
 Slosher-Deco
 Sloshing-Machine
-Snipewriter-5H
 Splash-o-matic
 Splat-Brella
 Splat-Charger
@@ -58,6 +57,7 @@ Sploosh-o-matic
 Squeezer
 Squiffer
 Tenta-Brella
+Tentatek-Splattershot
 Tri-Slosher
 Tri-Stringer
 Undercover-Brella
