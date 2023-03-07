@@ -1,8 +1,5 @@
 # %% [markdown]
 # ここに従ってpytorchの転移学習実装を作る． https://torch.classcat.com/category/transfer-learning/
-# 
-# convnet を再調整する : ランダム初期化の代わりに、imagenet 1000 データセット上で訓練された一つのような、事前訓練されたネットワークでネットワークを初期化します。訓練の残りは通常のようなものです。
-
 # %%
 from __future__ import print_function, division
 
@@ -20,30 +17,8 @@ from PIL import Image
 #import torchvision.transforms as transforms
 from torch.nn import functional as F
 
-# %% [markdown]
-# データをロードするために torchvision と torch.utils.data パッケージを使用します。
-
-# %% [markdown]
-# https://reafnex.net/ai/pytorch-use-imagefolder/
-# 
-# 
-# 次に、ImageFolderを使用して、先ほど作成したMNISTの手書き文字画像ファイルを取り込んでみます。最終的にバッチ分割されたデータローダーを作成します。
-# 
-# まずは、画像をテンソル化した後に、イメージ画像のデータ変換（標準化など）を行うクラスを定義します。
-
-# %%
-
-# %% [markdown]
-# 次にImageFolderを使用して画像データの取り込みを行います。イメージ画像の格納状態は以下のようになっています。各数字の画像ファイルを格納しているディレクトリ名を、イメージ画像のラベルとして使用します。
-# 
-# 
-# ・torchvision.datasets.ImageFolderは、イメージ画像ファイルを格納したディレクトリと画像変換設定を与えるだけなので、イメージ画像ファイルの整理さえできていれば、データ取込みがとても簡単にできてしまいます。PyTorchを使うならImageFolderを利用することで開発効率が格段にアップします。
-# 
-# 以下のコードでイメージ画像の取り込みを行っています。
-
 # %%
 #画像データをImageFolderを使って取込みする
-
 class ImageTransform():
   def __init__(self, mean, std):
     self.data_transform = transforms.Compose([
@@ -57,7 +32,7 @@ class ImageTransform():
 mean = (0.5,)
 std = (0.5,)
 #images = torchvision.datasets.ImageFolder( "/content/drive/MyDrive/2023/splashlog/230204_main_weapons", transform = ImageTransform(mean, std))
-images = torchvision.datasets.ImageFolder( "../230206_main_weapons_chill_seasons", transform = ImageTransform(mean, std))
+images = torchvision.datasets.ImageFolder( "../230206_main_weapons_chill_seasons_better", transform = ImageTransform(mean, std))
 
 # %%
 n_classes = len(images.classes)
@@ -69,10 +44,6 @@ f = open('main_weapon_list.txt', 'w')
 for x in class_names:
     f.write(str(x) + "\n")
 f.close()
-
-
-# %% [markdown]
-# https://qiita.com/takurooo/items/ba8c509eaab080e2752c
 
 # %%
 
@@ -185,11 +156,8 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     model.load_state_dict(best_model_wts)
     return model
 
-# %% [markdown]
-# ConvNet を再調整する
-# 事前訓練されたモデルをロードして最後の完全結合層をリセットします。
+# %%事前訓練されたモデルをロードして最後の完全結合層をリセットします。
 
-# %%
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 model = models.resnet18(pretrained=True)
@@ -221,6 +189,26 @@ exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
 # %%
 model = train_model(model, criterion, optimizer_ft, exp_lr_scheduler,
                        num_epochs=20)
+
+# %%
+def classify_image(img_path, model, k=3):
+    img = Image.open(img_path)
+    inputs = transform(img)
+    inputs = inputs.unsqueeze(0).to(device)
+    model.eval()
+
+    with torch.no_grad():
+        outputs = model(inputs)
+        batch_probs = F.softmax(outputs, dim=1)
+        batch_probs, batch_indices = batch_probs.sort(dim=1, descending=True)
+        for probs, indices in zip(batch_probs, batch_indices):
+            for i in range(k):
+                print(i)
+                print(indices[i])
+                print(class_names[indices[i]])
+
+classify_image("dinamo.jpg", weapon_model, k=3)
+classify_image("sharpmarker.jpg", weapon_model, k=3)
 
 # %%
 torch.save(model, '230206_main_weapons_classification_weight.pth')
