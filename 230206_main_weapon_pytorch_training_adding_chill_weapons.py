@@ -211,6 +211,6 @@ classify_image("dinamo.jpg", weapon_model, k=3)
 classify_image("sharpmarker.jpg", weapon_model, k=3)
 
 # %%
-torch.save(model, '230206_main_weapons_classification_weight.pth')
+torch.save(model, 'main_weapons_classification_weight.pth')
 
 # %%

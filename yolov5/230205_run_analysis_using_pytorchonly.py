@@ -893,7 +893,7 @@ results_names = results.names
 output_weapon_names_pytorch(results, weapon_model, main_list)
 
 #%%
-l = glob.glob('/home/hdd/splastock/720p/*/*[0-9].mp4')
+l = glob.glob('../videos/*.mp4')
 print(len(l))
 random.shuffle(l)
 
