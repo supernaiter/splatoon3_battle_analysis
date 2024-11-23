@@ -8,24 +8,29 @@ import numpy as np
 import cv2
 import statistics
 import os
-
+import signal
+import sys
+import queue
+from receiver import receiver_process
+import multiprocessing as mp
+from protocol import GameState  # プロトコルをインポート
+from PIL import Image
 # suppress warnings
 import warnings
 warnings.filterwarnings("ignore")
 
-from PIL import Image
-import time
+# インデックスの定数をプロトコルから使用
+TIMESTAMP_INDEX = 29
+PLAYER_STATES_START = 1
+PLAYER_STATES_END = 9
+WEAPONS_START = 13
+WEAPONS_END = 21
 
-import re
-import platform
-if platform.system() == 'Darwin':  # Mac OS
-    device = torch.device("mps")
-else:
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-#%%
 # Image
 img = "sample/battle.png"
+
+# im using m1 mac
+device = torch.device('mps')
 
 # Inference
 model = torch.hub.load('yolov5', 'custom', path='models/the_model.pt', source='local')
@@ -170,10 +175,9 @@ std = (0.5,)
 
 transform = ImageTransform(mean, std)
 
-#weapon_model = torch.load('../230206_main_weapons_classification_weight.pth', map_location=device)
+#weapon_model = torch.load('models/230206_main_weapons_classification_weight.pth', map_location=device)
 weapon_model = torch.load('models/main_weapons_classification_weight.pth', map_location=device)
 weapon_model.eval()  ## torch.nn.Module.eval
-
 
 
 def output_weapon_names_pytorch(results, weapon_model, main_list):
@@ -391,6 +395,21 @@ def output_penalty_numbers(results):
 
     return count_list
 
+# warm_up_frames変数の近くにフラグを追加
+warm_up_frames = 10
+warm_up_completed = False
+
+# 条件チェックを修正
+if warm_up_frames == 0 and not warm_up_completed:
+    detected_stage = None
+    weapon_list = pytorch_weapon_classification(warm_up_batch)
+    print("Warm-up completed. Starting detection...")
+    warm_up_completed = True
+
+if warm_up_completed:
+    result_list[21] = detected_stage
+    for i in range(len(weapon_list)):
+        result_list[13 + i] = weapon_list[i]
 
 message_dict = {}
 message_dict[0] = "1"
@@ -423,8 +442,8 @@ message_dict[26] = "も"
 message_dict[27] = "モ"
 message_dict[28] = "ン"
 message_dict[29] = "に"
-message_dict[30] = "お"
-message_dict[31] = "おう"
+message_dict[30] = ""
+message_dict[31] = ""
 message_dict[32] = "破"
 message_dict[33] = "プ"
 message_dict[34] = "ラ"
@@ -510,7 +529,7 @@ def list_available_cameras():
     """利用可能なカメラの一覧を取得"""
     available_cameras = {}
     
-    # 接続されているカメラを順番にチェック
+    # 接続されているカメラを順番にェック
     index = 0
     while True:
         cap = cv2.VideoCapture(index)
@@ -518,7 +537,7 @@ def list_available_cameras():
             break
         ret, _ = cap.read()
         if ret:
-            # カメの情報を取得
+            # メの情報を取得
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             fps = int(cap.get(cv2.CAP_PROP_FPS))
@@ -593,154 +612,111 @@ def select_camera():
             print("\nキャンセルされました")
             return None
 
-# メインコードの開始前にカメラ選択を実行
-selected_camera = select_camera()
-if selected_camera is None:
-    print("カメラが選択されませんでした。終了します。")
-    exit()
+def main():
+    # カメラ選択
+    selected_camera = select_camera()
+    if selected_camera is None:
+        print("カメラが選択されませんでした。終了します。")
+        return
 
-# カメラキャプチャーの初期化
-cap = cv2.VideoCapture(selected_camera)
+    # マルチプロセス用のキューを初期化
+    queue = mp.Queue()
+    receiver = mp.Process(target=receiver_process, args=(queue,))
+    receiver.start()
 
-# カメラの設定
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
-fps = 30
-cap.set(cv2.CAP_PROP_FPS, fps)
+    # カメラキャプチャーの初期化
+    cap = cv2.VideoCapture(selected_camera)
+    if not cap.isOpened():
+        print("カメラを開けませんでした。終了します。")
+        queue.put("STOP")
+        receiver.join()
+        return
 
-if not cap.isOpened():
-    print(f"カメラ {selected_camera} を開けませんでした")
-    exit()
+    # ウォームアップ用の変数
+    warm_up_frames = 10
+    warm_up_batch = []
+    warm_up_completed = False
+    detected_stage = None
+    weapon_list = None
 
-# 実際に設定された値を確認
-actual_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-actual_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-actual_fps = int(cap.get(cv2.CAP_PROP_FPS))
-print(f"\n実際の設定値:")
-print(f"解像度: {actual_width}x{actual_height}")
-print(f"FPS: {actual_fps}")
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                print("フレームの取得に失敗しました")
+                break
 
-# 基本的な変数の初期化
-frame_count = 0
-analysis_date = datetime.datetime.now()
-warm_up_batch = []
-final_result = deque()
-start_frame = None
-weapon_list = []
-detected_stage = None
-warm_up_frames = 10
-saved_center = cap.get(cv2.CAP_PROP_FRAME_WIDTH) // 2
+            # YOLOv5での検出
+            results = model(frame, 640)
+            
+            # 結果リストの初期化（プロトコルに従って33要素）
+            result_list = [None] * 33
 
-csv_path = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + ".csv"
+            # ウォームアップ処理
+            if not warm_up_completed:
+                if len(warm_up_batch) < warm_up_frames:
+                    warm_up_batch.append(results)
+                else:
+                    weapon_list = pytorch_weapon_classification(warm_up_batch)
+                    warm_up_completed = True
+                    print("ウォームアップ完了。検出を開始します...")
 
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        print('カメラからの読み取りに失敗')
-        break
-        
-    frame_count += 1
-    
-    # 表示用のフレームをコピー
-    display_frame = frame.copy()
-    
-    # RGB変換とYOLO処理
-    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    results = model(frame, 640)
-    np_results = results.xyxy[0].cpu().numpy()
-    
-    alive_count = np.sum(np_results[:, 5] == alive_num)
-    dead_count = np.sum(np_results[:, 5] == dead_num)
-    special_count = np.sum(np_results[:, 5] == special_num)
-    result_list = [None] * 33
+            if warm_up_completed:
+                # プレイヤー状態の検出
+                ikalump_line = output_ikalump_line(results)
+                for i, state in enumerate(ikalump_line):
+                    result_list[PLAYER_STATES_START + i] = int(state)
 
-    area_count = np.sum(np_results[:, 5] == area_object_num)
-    asari_count = np.sum(np_results[:, 5] == asari_object_num)
-    hoko_count = np.sum(np_results[:, 5] == hoko_kanmon_num)
-    yagura_count = np.sum(np_results[:, 5] == yagura_kanmon_num)
-    player_count = np.sum(np_results[:, 5] == player_num)
+                # 武器情報の設定
+                if weapon_list:
+                    for i, weapon in enumerate(weapon_list):
+                        result_list[WEAPONS_START + i] = weapon
 
-    message_count = np.sum(np_results[:, 5] == message_num)
+                # カウント情報の検出
+                counts = output_count_numbers(results)
+                if counts[0] is not None:
+                    result_list[9] = counts[0]
+                if counts[1] is not None:
+                    result_list[10] = counts[1]
 
-    all_count = alive_count + dead_count + special_count
+                # ペナルティの検出
+                penalties = output_penalty_numbers(results)
+                if penalties[0] is not None:
+                    result_list[11] = penalties[0]
+                if penalties[1] is not None:
+                    result_list[12] = penalties[1]
 
-    result_list[29] = analysis_date
+                # メッセージの検出
+                message_img = get_image(results, message_num)
+                if message_img is not None:
+                    message = ocr_message_yolo(message_ocr_model, message_img)
+                    result_list[26] = message
 
-    if start_frame is not None:
-        result_list[0] = round((frame_count - start_frame) * (1 / fps), 1)
+                # タイムスタンプの設定
+                result_list[TIMESTAMP_INDEX] = datetime.datetime.now()
 
-    # 検出結果を表示用フレームに描画
-    for det in np_results:
-        x1, y1, x2, y2, conf, cls = det
-        x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
-        label = f"Class {int(cls)} ({conf:.2f})"
-        cv2.rectangle(display_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.putText(display_frame, label, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                # キューにデータを送信
+                queue.put(result_list)
 
-    if all_count == 8:
-        if start_frame == None:
-            start_frame = frame_count
+            # 'q'キーで終了
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
 
-        ikalump_state = list(output_ikalump_line(results))
-        for i in range(len(ikalump_state)):
-            result_list[1 + i] = ikalump_state[i]
+    except KeyboardInterrupt:
+        print("\n処理を中断します...")
+    finally:
+        # リソースの解放
+        cap.release()
+        cv2.destroyAllWindows()
+        queue.put("STOP")
+        receiver.join()
 
-        if warm_up_frames > 0:
-            warm_up_batch.append(results)
-            warm_up_frames -= 1
-            if warm_up_frames == 0:
-                detected_stage = None
-                weapon_list = pytorch_weapon_classification(warm_up_batch)
-                print(result_list)
-
-        if warm_up_frames == 0:
-            result_list[21] = detected_stage
-            for i in range(len(weapon_list)):
-                result_list[13 + i] = weapon_list[i]
-            print("warm_up_ends.")
-
-    result_list[22] = asari_count
-    result_list[23] = hoko_count
-    result_list[24] = area_count
-    result_list[25] = yagura_count
-
-    if message_count > 0:
-        message_img = get_image(results, message_num)
-        if message_img is not None:
-            message = ocr_message_yolo(message_ocr_model, message_img)
-            print(message)
-            result_list[26] = message
-
-    if player_count > 0:
-        result_list[27] = True
-
-    count_list = output_count_numbers(results)
-    for i in range(len(count_list)):
-        result_list[9 + i] = count_list[i]
-
-    penalty_list = output_penalty_numbers(results)
-    for i in range(len(penalty_list)):
-        result_list[11 + i] = penalty_list[i]
-
-    final_result.append(result_list)
-
-    # 結果の表示（サイズを1/3に縮小）
-    display_frame_small = cv2.resize(display_frame, (display_frame.shape[1]//3, display_frame.shape[0]//3))
-    cv2.imshow("yolo", display_frame_small)
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-# 終了処理
-cap.release()
-cv2.destroyAllWindows()
-
-# 結果の保存
-final_result = list(final_result)
-with open(csv_path, mode="w", newline="") as f:
-    writer = csv.writer(f)
-    for res in final_result:
-        writer.writerow(res)
-# %%
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nプログラムを終了します")
+        sys.exit(0)
 
 
 
