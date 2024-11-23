@@ -3,3 +3,6 @@
 *.pycache__
 *.pycache__
 .vscode
+main_training_dataset/
+data/
+footages/

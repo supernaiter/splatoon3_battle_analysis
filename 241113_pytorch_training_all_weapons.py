@@ -1,0 +1,232 @@
+# %% [markdown]
+# ここに従ってpytorchの転移学習実装を作る． https://torch.classcat.com/category/transfer-learning/
+# %%
+from __future__ import print_function, division
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.optim import lr_scheduler
+import numpy as np
+import torchvision
+from torchvision import models, transforms
+import matplotlib.pyplot as plt
+import time
+import copy
+from PIL import Image
+#import torchvision.transforms as transforms
+from torch.nn import functional as F
+import multiprocessing
+
+# %%
+#画像データをImageFolderを使って取込みする
+class ImageTransform():
+  def __init__(self, mean, std):
+    self.data_transform = transforms.Compose([
+    transforms.Resize((64, 64)),
+    transforms.RandomHorizontalFlip(),
+    transforms.RandomRotation(10),
+    transforms.ColorJitter(brightness=0.2, contrast=0.2),
+    transforms.ToTensor(),
+    transforms.Normalize(mean, std)
+    ])
+
+  def __call__(self, img):
+    return self.data_transform(img)
+mean = (0.5,)
+std = (0.5,)
+#images = torchvision.datasets.ImageFolder( "/content/drive/MyDrive/2023/splashlog/230204_main_weapons", transform = ImageTransform(mean, std))
+images = torchvision.datasets.ImageFolder( "main_training_dataset", transform = ImageTransform(mean, std))
+
+# %%
+n_classes = len(images.classes)
+print(n_classes)
+
+class_names = images.classes
+
+f = open('main_weapon_list.txt', 'w')
+for x in class_names:
+    f.write(str(x) + "\n")
+f.close()
+
+# %%
+
+trainval_dataset = images
+
+n_samples = len(trainval_dataset) # n_samples is 60000
+train_size = int(len(trainval_dataset) * 0.8) # train_size is 48000
+val_size = n_samples - train_size # val_size is 48000
+
+# shuffleしてから分割してくれる.
+train_dataset, val_dataset = torch.utils.data.random_split(trainval_dataset, [train_size, val_size])
+
+print(len(train_dataset)) # 48000
+print(len(val_dataset)) # 12000
+
+
+test_dataset, val_dataset = torch.utils.data.random_split(val_dataset, [len(val_dataset)//2, len(val_dataset)-len(val_dataset)//2])
+
+print(len(train_dataset)) # 48000
+print(len(val_dataset)) # 12000
+print(len(test_dataset)) # 12000
+
+# %%
+dataset_sizes = {"train":len(train_dataset), "val":len(val_dataset)}
+
+dataloaders = {}
+dataloaders["train"] = torch.utils.data.DataLoader(
+    train_dataset, 
+    batch_size=4,
+    shuffle=True, 
+    num_workers=0
+)
+dataloaders["val"] = torch.utils.data.DataLoader(
+    val_dataset, 
+    batch_size=4,
+    shuffle=True, 
+    num_workers=0
+)
+
+# %% [markdown]
+# モデルを訓練する
+# さて、モデルを訓練するための一般的な関数を書きましょう。ここでは、次を示します :
+# 
+# ・学習率をスケジューリングする
+# 
+# ・ベスト・モデルをセーブする
+# 
+# 以下で、パラメータ・スケジューラは torch.optim.lr_scheduler からの LR スケジューラ・オブジェクトです。
+# 
+
+# %%
+def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
+    since = time.time()
+
+    best_model_wts = copy.deepcopy(model.state_dict())
+    best_acc = 0.0
+
+    for epoch in range(num_epochs):
+        print('Epoch {}/{}'.format(epoch, num_epochs - 1))
+        print('-' * 10)
+
+        # Each epoch has a training and validation phase
+        for phase in ['train', 'val']:
+            if phase == 'train':
+                model.train()  # Set model to training mode
+            else:
+                model.eval()   # Set model to evaluate mode
+
+            running_loss = 0.0
+            running_corrects = 0
+
+            # Iterate over data.
+            for inputs, labels in dataloaders[phase]:
+            #for inputs, labels in train_dataloader[phase]:
+                inputs = inputs.to(device)
+                labels = labels.to(device)
+
+                # zero the parameter gradients
+                optimizer.zero_grad()
+
+                # forward
+                # track history if only in train
+                with torch.set_grad_enabled(phase == 'train'):
+                    outputs = model(inputs)
+                    _, preds = torch.max(outputs, 1)
+                    loss = criterion(outputs, labels)
+
+                    # backward + optimize only if in training phase
+                    if phase == 'train':
+                        loss.backward()
+                        optimizer.step()
+
+                # statistics
+                running_loss += loss.item() * inputs.size(0)
+                running_corrects += torch.sum(preds == labels.data)
+            if phase == 'train':
+                scheduler.step()
+
+            epoch_loss = running_loss / dataset_sizes[phase]
+            epoch_acc = running_corrects.double() / dataset_sizes[phase]
+
+            print('{} Loss: {:.4f} Acc: {:.4f}'.format(
+                phase, epoch_loss, epoch_acc))
+
+            # deep copy the model
+            if phase == 'val' and epoch_acc > best_acc:
+                best_acc = epoch_acc
+                best_model_wts = copy.deepcopy(model.state_dict())
+
+        print()
+
+    time_elapsed = time.time() - since
+    print('Training complete in {:.0f}m {:.0f}s'.format(
+        time_elapsed // 60, time_elapsed % 60))
+    print('Best val Acc: {:4f}'.format(best_acc))
+
+    # load best model weights
+    model.load_state_dict(best_model_wts)
+    return model
+
+# %%事前訓練されたモデルをロードして最後の完全結合層をリセットします。
+
+if __name__ == '__main__':
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
+    #model_ft = models.mobilenet_v2(pretrained=True)
+    #最後の完全結合層（全結合層）は、model_ft.fc = nn.Linear(num_ftrs, 2)という行でリセットされています。 この行では、元のモデルのfc層（出力層）が新しい線形層に置き換えられています。
+    #次に、出力層のノード数を2に設定するために、model_ft.fcを更新します。
+    num_ftrs = model.fc.in_features
+    # Alternatively, it can be generalized to nn.Linear(num_ftrs, n_classes).
+    model.fc = nn.Sequential(
+        nn.Dropout(0.5),
+        nn.Linear(num_ftrs, n_classes)
+    )
+
+    #num_ftrs = model.classifier[0].in_features
+    #model.classifier[0] = nn.Linear(num_ftrs, n_classes)
+
+    #model = torchvision.models.mobilenet_v2(pretrained=True)
+    #model.classifier[1] = nn.Linear(in_features=model.classifier[1].in_features, out_features=n_classes)
+
+    #次に、学習させるために、GPUまたはCPUにモデルを送信します。
+    model = model.to(device)
+
+    #損失関数として、クロスエントロピー損失関数を設定します。
+    criterion = nn.CrossEntropyLoss()
+
+    # Observe that all parameters are being optimized
+    optimizer_ft = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+
+    # Decay LR by a factor of 0.1 every 7 epochs
+    exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
+
+    # %%
+    model = train_model(model, criterion, optimizer_ft, exp_lr_scheduler,
+                           num_epochs=20)
+
+    # %%
+    def classify_image(img_path, model, k=3):
+        transform = ImageTransform(mean=(0.5,), std=(0.5,))
+        img = Image.open(img_path)
+        inputs = transform(img)
+        inputs = inputs.unsqueeze(0).to(device)
+        model.eval()
+
+        with torch.no_grad():
+            outputs = model(inputs)
+            batch_probs = F.softmax(outputs, dim=1)
+            batch_probs, batch_indices = batch_probs.sort(dim=1, descending=True)
+            for probs, indices in zip(batch_probs, batch_indices):
+                for i in range(k):
+                    print(i)
+                    print(indices[i])
+                    print(class_names[indices[i]])
+
+    classify_image("dinamo.jpg", model, k=3)
+    classify_image("sharpmarker.jpg", model, k=3)
+
+    # %%
+    torch.save(model, 'main_weapons_classification_weight.pth')
+
+    # %%
